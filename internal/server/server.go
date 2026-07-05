@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -64,7 +65,11 @@ func RunHTTP(ctx context.Context, srv *mcp.Server, addr string) error {
 	// restore it with the stdlib middleware it recommends. This guards against
 	// cross-origin browser (CSRF / DNS-rebinding) requests; non-browser MCP
 	// clients, which send no Origin/Sec-Fetch-Site headers, are unaffected.
-	handler := http.NewCrossOriginProtection().Handler(base)
+	cop := http.NewCrossOriginProtection()
+	if h := os.Getenv("TRUSTED_ORIGIN"); h != "" {
+		_ = cop.AddTrustedOrigin("https://" + h)
+	}
+	handler := cop.Handler(base)
 	httpSrv := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
