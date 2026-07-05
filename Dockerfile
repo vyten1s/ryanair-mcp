@@ -25,4 +25,4 @@ COPY --from=build /out/ryanair-mcp /ryanair-mcp
 # stdio is the default transport. For HTTP, override the command, e.g.:
 #   docker run -p 8080:8080 ghcr.io/adambenhassen/ryanair-mcp --transport http --addr :8080
 EXPOSE 8080
-ENTRYPOINT ["/ryanair-mcp"]
+ENTRYPOINT ["/ryanair-mcp", "--transport", "http", "--addr", "0.0.0.0:10000"]
