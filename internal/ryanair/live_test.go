@@ -123,7 +123,7 @@ func TestLiveSmoke(t *testing.T) {
 	t.Run("CheapestWeekend", func(t *testing.T) {
 		// May legitimately be nil if no priced weekend exists; we only assert the
 		// multi-month composition runs without error against the live endpoint.
-		trip, err := client.CheapestWeekend(liveCtx(t), ryanair.WeekendParams{Origin: liveOrigin, Destination: liveDest, MonthsAhead: 2, WeekendLength: 2})
+		trip, err := client.CheapestWeekend(liveCtx(t), ryanair.WeekendParams{Origin: liveOrigin, Destination: liveDest, MonthsAhead: 2})
 		if err != nil {
 			t.Fatalf("CheapestWeekend: %v", err)
 		}

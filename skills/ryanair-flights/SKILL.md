@@ -50,8 +50,8 @@ DUB→BCN?".
   (`origin`, `destination`, `month`)
 - `cheapest_return_per_day` — return price calendar, outbound + inbound side by
   side. (`origin`, `destination`, `outbound_month`)
-- `cheapest_weekend` — cheapest Fri→Sun (or Fri→Mon) return over the next few
-  months. (`origin`, `destination`, opt `months_ahead`, `weekend_length`)
+- `cheapest_weekend` — cheapest weekend return (out Fri/Sat/Sun, back Sat/Sun/Mon,
+  1–3 nights by default) over the next few months. (`origin`, `destination`, opt `months_ahead`, `min_nights`, `max_nights`)
 
 **Schedules & availability**
 - `get_active_dates` — dates a route is currently bookable (no prices).

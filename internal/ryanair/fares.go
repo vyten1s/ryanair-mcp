@@ -56,13 +56,28 @@ type ReturnCalendarParams struct {
 	Currency      string // optional, ISO 4217
 }
 
-// WeekendParams selects the cheapest weekend return trip for a route.
+// WeekendParams selects the cheapest weekend return trip for a route. A
+// weekend trip departs Fri/Sat/Sun and returns Sat/Sun/Mon, lasting
+// MinNights..MaxNights nights.
 type WeekendParams struct {
-	Origin        string // required, IATA
-	Destination   string // required, IATA
-	MonthsAhead   int    // required, >= 1
-	WeekendLength int    // required, 2 (Fri-Sun) or 3 (Fri-Mon)
+	Origin      string // required, IATA
+	Destination string // required, IATA
+	MonthsAhead int    // required, >= 1
+	MinNights   int    // optional, default 1
+	MaxNights   int    // optional, default 3
 }
+
+const (
+	defaultWeekendMinNights = 1
+	defaultWeekendMaxNights = 3
+)
+
+// weekendOutboundDays and weekendInboundDays define which weekdays count as a
+// weekend departure and return.
+var (
+	weekendOutboundDays = map[time.Weekday]bool{time.Friday: true, time.Saturday: true, time.Sunday: true}
+	weekendInboundDays  = map[time.Weekday]bool{time.Saturday: true, time.Sunday: true, time.Monday: true}
+)
 
 func (p OneWayParams) values() (url.Values, error) {
 	origin := normIATA(p.Origin)
@@ -304,15 +319,26 @@ func (c *Client) CheapestReturnPerDay(ctx context.Context, params ReturnCalendar
 	}, nil
 }
 
-// CheapestWeekend finds the cheapest Friday->Sunday (WeekendLength 2) or
-// Friday->Monday (WeekendLength 3) return trip over the next params.MonthsAhead
-// months. It returns nil when no priced weekend exists in the window.
+// CheapestWeekend finds the cheapest weekend return trip over the next
+// params.MonthsAhead months: outbound Fri/Sat/Sun, inbound Sat/Sun/Mon, lasting
+// MinNights..MaxNights nights (default 1..3). It returns nil when no priced
+// weekend exists in the window.
 func (c *Client) CheapestWeekend(ctx context.Context, params WeekendParams) (*WeekendTrip, error) {
-	if params.WeekendLength != 2 && params.WeekendLength != 3 {
-		return nil, fmt.Errorf("weekend length must be 2 (Fri-Sun) or 3 (Fri-Mon), got %d", params.WeekendLength)
-	}
 	if params.MonthsAhead < 1 {
 		return nil, fmt.Errorf("months ahead must be >= 1, got %d", params.MonthsAhead)
+	}
+	minNights, maxNights := params.MinNights, params.MaxNights
+	if minNights == 0 {
+		minNights = defaultWeekendMinNights
+	}
+	if maxNights == 0 {
+		maxNights = defaultWeekendMaxNights
+	}
+	if minNights < 1 || maxNights < 1 {
+		return nil, fmt.Errorf("weekend nights must be >= 1, got min %d max %d", minNights, maxNights)
+	}
+	if minNights > maxNights {
+		return nil, fmt.Errorf("weekend min nights (%d) cannot exceed max nights (%d)", minNights, maxNights)
 	}
 	now := time.Now()
 	end := now.AddDate(0, params.MonthsAhead, 0)
@@ -324,8 +350,8 @@ func (c *Client) CheapestWeekend(ctx context.Context, params WeekendParams) (*We
 			Destination:   params.Destination,
 			OutboundMonth: month,
 			InboundMonth:  month,
-			MinTripDays:   params.WeekendLength,
-			MaxTripDays:   params.WeekendLength,
+			MinTripDays:   minNights,
+			MaxTripDays:   maxNights,
 		})
 		if err != nil {
 			return nil, err
@@ -333,12 +359,13 @@ func (c *Client) CheapestWeekend(ctx context.Context, params WeekendParams) (*We
 		outbounds = append(outbounds, fares.Outbound...)
 		inbounds = append(inbounds, fares.Inbound...)
 	}
-	return cheapestWeekendTrip(outbounds, inbounds, params.WeekendLength)
+	return cheapestWeekendTrip(outbounds, inbounds, minNights, maxNights)
 }
 
-// cheapestWeekendTrip pairs each priced Friday outbound with the inbound
-// weekendLength days later and returns the cheapest combined pair, or nil.
-func cheapestWeekendTrip(outbounds, inbounds []DailyFare, weekendLength int) (*WeekendTrip, error) {
+// cheapestWeekendTrip pairs every priced Fri/Sat/Sun outbound with every priced
+// Sat/Sun/Mon inbound landing minNights..maxNights days later, and returns the
+// cheapest combined pair, or nil.
+func cheapestWeekendTrip(outbounds, inbounds []DailyFare, minNights, maxNights int) (*WeekendTrip, error) {
 	inboundByDay := make(map[string]DailyFare, len(inbounds))
 	for _, in := range inbounds {
 		if in.Price != nil {
@@ -354,19 +381,24 @@ func cheapestWeekendTrip(outbounds, inbounds []DailyFare, weekendLength int) (*W
 		if err != nil {
 			return nil, fmt.Errorf("ryanair: parse weekend day %q: %w", out.Day, err)
 		}
-		if day.Weekday() != time.Friday {
+		if !weekendOutboundDays[day.Weekday()] {
 			continue
 		}
-		retDay := day.AddDate(0, 0, weekendLength).Format(dateLayout)
-		in, ok := inboundByDay[retDay]
-		if !ok {
-			continue
-		}
-		total := *out.Price + *in.Price
-		if best == nil || total < best.TotalPrice {
-			// Both legs come from one cheapestPerDay response priced in a single
-			// currency, so the outbound's currency represents the whole trip.
-			best = &WeekendTrip{Outbound: out, Inbound: in, TotalPrice: total, Currency: out.Currency}
+		for n := minNights; n <= maxNights; n++ {
+			ret := day.AddDate(0, 0, n)
+			if !weekendInboundDays[ret.Weekday()] {
+				continue
+			}
+			in, ok := inboundByDay[ret.Format(dateLayout)]
+			if !ok {
+				continue
+			}
+			total := *out.Price + *in.Price
+			if best == nil || total < best.TotalPrice {
+				// Both legs come from one cheapestPerDay response priced in a single
+				// currency, so the outbound's currency represents the whole trip.
+				best = &WeekendTrip{Outbound: out, Inbound: in, TotalPrice: total, Currency: out.Currency}
+			}
 		}
 	}
 	return best, nil

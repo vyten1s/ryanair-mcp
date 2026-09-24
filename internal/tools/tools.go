@@ -40,7 +40,7 @@ func Register(srv *mcp.Server, client *ryanair.Client) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "cheapest_weekend",
-		Description: "Find the cheapest Friday-to-Sunday (or Friday-to-Monday) return weekend on a route over the next few months. Returns the outbound/inbound pair and total price.",
+		Description: "Find the cheapest weekend return trip on a route over the next few months: outbound Fri/Sat/Sun, return Sat/Sun/Mon, lasting min_nights..max_nights nights (default 1-3). Returns the outbound/inbound pair and total price.",
 	}, cheapestWeekend(client))
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -240,10 +240,11 @@ func cheapestReturnPerDay(c *ryanair.Client) mcp.ToolHandlerFor[returnCalendarIn
 // --- cheapest_weekend ---
 
 type weekendInput struct {
-	Origin        string `json:"origin"                   jsonschema:"departure airport IATA code"`
-	Destination   string `json:"destination"              jsonschema:"arrival airport IATA code"`
-	MonthsAhead   int    `json:"months_ahead,omitempty"   jsonschema:"how many months ahead to search (default 3)"`
-	WeekendLength int    `json:"weekend_length,omitempty" jsonschema:"2 for Fri-Sun or 3 for Fri-Mon (default 2)"`
+	Origin      string `json:"origin"                 jsonschema:"departure airport IATA code"`
+	Destination string `json:"destination"            jsonschema:"arrival airport IATA code"`
+	MonthsAhead int    `json:"months_ahead,omitempty" jsonschema:"how many months ahead to search (default 3)"`
+	MinNights   int    `json:"min_nights,omitempty"   jsonschema:"minimum nights away (default 1)"`
+	MaxNights   int    `json:"max_nights,omitempty"   jsonschema:"maximum nights away (default 3)"`
 }
 
 type weekendOutput struct {
@@ -257,15 +258,12 @@ func cheapestWeekend(c *ryanair.Client) mcp.ToolHandlerFor[weekendInput, weekend
 		if monthsAhead == 0 {
 			monthsAhead = 3
 		}
-		weekendLength := in.WeekendLength
-		if weekendLength == 0 {
-			weekendLength = 2
-		}
 		trip, err := c.CheapestWeekend(ctx, ryanair.WeekendParams{
-			Origin:        in.Origin,
-			Destination:   in.Destination,
-			MonthsAhead:   monthsAhead,
-			WeekendLength: weekendLength,
+			Origin:      in.Origin,
+			Destination: in.Destination,
+			MonthsAhead: monthsAhead,
+			MinNights:   in.MinNights,
+			MaxNights:   in.MaxNights,
 		})
 		if err != nil {
 			return nil, weekendOutput{}, err

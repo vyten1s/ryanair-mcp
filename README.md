@@ -111,7 +111,7 @@ docker run --rm -p 8080:8080 ghcr.io/adambenhassen/ryanair-mcp:latest \
 | `find_anywhere_under` | Cheapest one-way fare to each reachable destination from an origin under a price cap, in a date window — returns a list of flights, one per destination, sorted by price. | `origin`, `date_from`, `date_to`, `max_price`, *(opt)* `currency` |
 | `cheapest_per_day` | Cheapest one-way fare per day of a month on a route (price calendar). | `origin`, `destination`, `month` (`YYYY-MM-01`), *(opt)* `currency` |
 | `cheapest_return_per_day` | Cheapest return fare per day on a route, outbound and inbound calendars side by side. | `origin`, `destination`, `outbound_month` (`YYYY-MM-01`), *(opt)* `inbound_month`, `min_trip_days`, `max_trip_days`, `currency` |
-| `cheapest_weekend` | Cheapest Fri→Sun (or Fri→Mon) return weekend on a route over the next few months. | `origin`, `destination`, *(opt)* `months_ahead` (default 3), `weekend_length` (`2`\|`3`, default 2) |
+| `cheapest_weekend` | Cheapest weekend return trip on a route over the next few months: out Fri/Sat/Sun, back Sat/Sun/Mon. | `origin`, `destination`, *(opt)* `months_ahead` (default 3), `min_nights` (default 1), `max_nights` (default 3) |
 | `get_active_dates` | Dates a route is currently bookable (ISO dates, no prices). | `origin`, `destination` |
 | `get_schedules` | Published timetable (days/times a route runs, no prices) for a month. | `origin`, `destination`, `year`, `month` |
 | `list_airports` | List Ryanair airports, optionally filtered by country. | *(opt)* `country` (ISO-3166 alpha-2) |

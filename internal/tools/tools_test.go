@@ -183,16 +183,16 @@ func TestCheapestReturnPerDayHandler(t *testing.T) {
 
 func TestCheapestWeekendHandler(t *testing.T) {
 	c := exploreClient(t)
-	trip, err := tools.RunCheapestWeekend(c, "DUB", "STN", 1, 2)
+	trip, err := tools.RunCheapestWeekend(c, "DUB", "STN", 1, 1, 3)
 	if err != nil {
 		t.Fatalf("weekend: %v", err)
 	}
 	if trip == nil || trip.TotalPrice != 33.00 {
 		t.Errorf("trip = %+v, want total 33.00", trip)
 	}
-	// Omitted weekend_length (0) must default to a valid value (Fri->Sun).
-	if _, err := tools.RunCheapestWeekend(c, "DUB", "STN", 1, 0); err != nil {
-		t.Errorf("default weekend_length: %v", err)
+	// Omitted min/max nights (0) must default to a valid range (1-3).
+	if _, err := tools.RunCheapestWeekend(c, "DUB", "STN", 1, 0, 0); err != nil {
+		t.Errorf("default nights: %v", err)
 	}
 }
 

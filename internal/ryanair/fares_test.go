@@ -336,24 +336,28 @@ func TestCheapestWeekend(t *testing.T) {
 	client := newClient(t, routeFixtures(t, fs, map[string]string{
 		"/farfnd/v4/roundTripFares/DUB/STN/cheapestPerDay": "return_cheapest_per_day.json",
 	}))
-	trip, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "dub", Destination: "stn", MonthsAhead: 1, WeekendLength: 2})
+	trip, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "dub", Destination: "stn", MonthsAhead: 1})
 	if err != nil {
 		t.Fatalf("CheapestWeekend: %v", err)
 	}
 	if trip == nil {
 		t.Fatal("expected a weekend trip")
 	}
-	// Cheapest Fri->Sun pair in the fixture: 2026-07-10 (15.00) + 2026-07-12 (18.00).
+	// Cheapest weekend pair in the fixture (Fri/Sat/Sun out, Sat/Sun/Mon back,
+	// 1-3 nights): 2026-07-10 (15.00) + 2026-07-12 (18.00).
 	if trip.Outbound.Day != "2026-07-10" || trip.Inbound.Day != "2026-07-12" {
 		t.Errorf("trip days = %s -> %s, want 2026-07-10 -> 2026-07-12", trip.Outbound.Day, trip.Inbound.Day)
 	}
 	if trip.TotalPrice != 33.00 {
 		t.Errorf("total = %v, want 33.00", trip.TotalPrice)
 	}
-	if _, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "DUB", Destination: "STN", MonthsAhead: 1, WeekendLength: 5}); err == nil {
-		t.Error("expected error for invalid weekend_length")
+	if _, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "DUB", Destination: "STN", MonthsAhead: 1, MinNights: 3, MaxNights: 1}); err == nil {
+		t.Error("expected error for min nights > max nights")
 	}
-	if _, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "DUB", Destination: "STN", MonthsAhead: 0, WeekendLength: 2}); err == nil {
+	if _, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "DUB", Destination: "STN", MonthsAhead: 1, MinNights: -1}); err == nil {
+		t.Error("expected error for negative nights")
+	}
+	if _, err := client.CheapestWeekend(context.Background(), ryanair.WeekendParams{Origin: "DUB", Destination: "STN", MonthsAhead: 0}); err == nil {
 		t.Error("expected error for months_ahead < 1")
 	}
 }

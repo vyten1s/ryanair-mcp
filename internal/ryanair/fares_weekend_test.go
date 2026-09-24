@@ -12,81 +12,97 @@ func TestCheapestWeekendTripMatcher(t *testing.T) {
 		return ryanair.DailyFare{Day: day, Price: p, Currency: "EUR"}
 	}
 	cases := []struct {
-		name            string
-		outbounds       []ryanair.DailyFare
-		inbounds        []ryanair.DailyFare
-		length          int
-		wantNil         bool
-		wantOut, wantIn string
-		wantTotal       float64
+		name                 string
+		outbounds            []ryanair.DailyFare
+		inbounds             []ryanair.DailyFare
+		minNights, maxNights int
+		wantNil              bool
+		wantOut, wantIn      string
+		wantTotal            float64
 	}{
 		{
-			name: "picks cheapest priced Friday pair, ignoring non-Fridays (Thu and Sat)",
+			name: "picks cheapest pair across Fri/Sat/Sun outbounds",
 			outbounds: []ryanair.DailyFare{
 				fare("2026-07-03", price(20)), // Fri
-				fare("2026-07-10", price(15)), // Fri (cheaper)
-				fare("2026-07-04", price(1)),  // Sat - must be ignored despite lowest price
-				fare("2026-07-02", price(1)),  // Thu - must be ignored (pins Friday, not just "skip Sat")
+				fare("2026-07-04", price(10)), // Sat (cheapest valid)
+				fare("2026-07-02", price(1)),  // Thu - must be ignored despite lowest price
 			},
 			inbounds: []ryanair.DailyFare{
-				fare("2026-07-05", price(25)), // Sun -> pairs 07-03
-				fare("2026-07-12", price(18)), // Sun -> pairs 07-10
-				fare("2026-07-06", price(1)),  // Mon -> +2 from 07-04 (a Sat, never matched)
-				fare("2026-07-04", price(1)),  // Sat -> +2 from 07-02 (a Thu, never matched)
+				fare("2026-07-05", price(25)), // Sun
+				fare("2026-07-06", price(7)),  // Mon
 			},
-			length: 2, wantOut: "2026-07-10", wantIn: "2026-07-12", wantTotal: 33,
+			minNights: 1, maxNights: 3, wantOut: "2026-07-04", wantIn: "2026-07-06", wantTotal: 17,
 		},
 		{
-			name: "Fri->Mon (weekend_length 3) offset",
-			outbounds: []ryanair.DailyFare{
-				fare("2026-07-03", price(10)), // Fri
-			},
-			inbounds: []ryanair.DailyFare{
-				fare("2026-07-05", price(99)), // Sun (+2) - wrong offset, must not match
-				fare("2026-07-06", price(5)),  // Mon (+3) - the length-3 match
-			},
-			length: 3, wantOut: "2026-07-03", wantIn: "2026-07-06", wantTotal: 15,
+			name:      "Sun->Mon one-night trip is allowed",
+			outbounds: []ryanair.DailyFare{fare("2026-07-05", price(10))}, // Sun
+			inbounds:  []ryanair.DailyFare{fare("2026-07-06", price(5))},  // Mon
+			minNights: 1, maxNights: 3, wantOut: "2026-07-05", wantIn: "2026-07-06", wantTotal: 15,
 		},
 		{
-			name: "skips nil-priced Friday in favor of a priced one",
+			name:      "Fri->Mon three-night trip is allowed",
+			outbounds: []ryanair.DailyFare{fare("2026-07-03", price(10))}, // Fri
+			inbounds:  []ryanair.DailyFare{fare("2026-07-06", price(5))},  // Mon (+3)
+			minNights: 1, maxNights: 3, wantOut: "2026-07-03", wantIn: "2026-07-06", wantTotal: 15,
+		},
+		{
+			name:      "weekend crossing a month boundary",
+			outbounds: []ryanair.DailyFare{fare("2026-07-31", price(12))}, // Fri
+			inbounds:  []ryanair.DailyFare{fare("2026-08-02", price(8))},  // Sun
+			minNights: 1, maxNights: 3, wantOut: "2026-07-31", wantIn: "2026-08-02", wantTotal: 20,
+		},
+		{
+			name:      "Thursday outbound -> nil",
+			outbounds: []ryanair.DailyFare{fare("2026-07-02", price(1))}, // Thu
+			inbounds:  []ryanair.DailyFare{fare("2026-07-04", price(1))}, // Sat (+2)
+			minNights: 1, maxNights: 3, wantNil: true,
+		},
+		{
+			name:      "Tuesday inbound -> nil",
+			outbounds: []ryanair.DailyFare{fare("2026-07-05", price(1))}, // Sun
+			inbounds:  []ryanair.DailyFare{fare("2026-07-07", price(1))}, // Tue (+2)
+			minNights: 1, maxNights: 3, wantNil: true,
+		},
+		{
+			name:      "respects max nights",
+			outbounds: []ryanair.DailyFare{fare("2026-07-03", price(5))}, // Fri
+			inbounds:  []ryanair.DailyFare{fare("2026-07-06", price(5))}, // Mon (+3)
+			minNights: 1, maxNights: 2, wantNil: true,
+		},
+		{
+			name:      "respects min nights",
+			outbounds: []ryanair.DailyFare{fare("2026-07-05", price(5))}, // Sun
+			inbounds:  []ryanair.DailyFare{fare("2026-07-06", price(5))}, // Mon (+1)
+			minNights: 2, maxNights: 3, wantNil: true,
+		},
+		{
+			name: "skips nil-priced outbound in favor of a priced one",
 			outbounds: []ryanair.DailyFare{
 				fare("2026-07-10", nil),       // Fri, no price -> skipped
 				fare("2026-07-03", price(40)), // Fri, priced
 			},
 			inbounds: []ryanair.DailyFare{
-				fare("2026-07-05", price(10)), // pairs 07-03
+				fare("2026-07-05", price(10)), // Sun, pairs 07-03
 				fare("2026-07-12", price(1)),  // would pair 07-10, but that outbound is unpriced
 			},
-			length: 2, wantOut: "2026-07-03", wantIn: "2026-07-05", wantTotal: 50,
+			minNights: 1, maxNights: 3, wantOut: "2026-07-03", wantIn: "2026-07-05", wantTotal: 50,
 		},
 		{
-			name: "skips Friday whose matching inbound is nil-priced",
+			name: "skips inbound that is nil-priced",
 			outbounds: []ryanair.DailyFare{
-				fare("2026-07-10", price(1)),  // Fri (cheapest) but its inbound is unpriced
+				fare("2026-07-10", price(1)),  // Fri, but its only inbound is unpriced
 				fare("2026-07-03", price(40)), // Fri, fully priced pair
 			},
 			inbounds: []ryanair.DailyFare{
-				fare("2026-07-12", nil),       // Sun -> would pair 07-10, but unpriced -> skipped
-				fare("2026-07-05", price(10)), // Sun -> pairs 07-03
+				fare("2026-07-12", nil),       // Sun, unpriced -> skipped
+				fare("2026-07-05", price(10)), // Sun, pairs 07-03
 			},
-			length: 2, wantOut: "2026-07-03", wantIn: "2026-07-05", wantTotal: 50,
-		},
-		{
-			name:      "Friday with no matching inbound -> nil",
-			outbounds: []ryanair.DailyFare{fare("2026-07-03", price(20))}, // Fri
-			inbounds:  []ryanair.DailyFare{fare("2026-07-04", price(20))}, // not +2 days
-			length:    2, wantNil: true,
-		},
-		{
-			name:      "no Friday outbound -> nil",
-			outbounds: []ryanair.DailyFare{fare("2026-07-04", price(10))}, // Sat
-			inbounds:  []ryanair.DailyFare{fare("2026-07-06", price(10))},
-			length:    2, wantNil: true,
+			minNights: 1, maxNights: 3, wantOut: "2026-07-03", wantIn: "2026-07-05", wantTotal: 50,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			trip, err := ryanair.CheapestWeekendTrip(tc.outbounds, tc.inbounds, tc.length)
+			trip, err := ryanair.CheapestWeekendTrip(tc.outbounds, tc.inbounds, tc.minNights, tc.maxNights)
 			if err != nil {
 				t.Fatalf("matcher: %v", err)
 			}
@@ -115,7 +131,7 @@ func TestCheapestWeekendTripMatcher(t *testing.T) {
 func TestCheapestWeekendTripMalformedDay(t *testing.T) {
 	v := 10.0
 	out := []ryanair.DailyFare{{Day: "not-a-date", Price: &v, Currency: "EUR"}}
-	if _, err := ryanair.CheapestWeekendTrip(out, nil, 2); err == nil {
+	if _, err := ryanair.CheapestWeekendTrip(out, nil, 1, 3); err == nil {
 		t.Fatal("expected error for malformed outbound day")
 	}
 }

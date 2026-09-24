@@ -125,10 +125,10 @@ func RunCheapestReturnPerDay(c *ryanair.Client, origin, dest, outMonth, inMonth 
 }
 
 // RunCheapestWeekend invokes the cheapest_weekend handler end-to-end.
-func RunCheapestWeekend(c *ryanair.Client, origin, dest string, monthsAhead, weekendLength int) (*ryanair.WeekendTrip, error) {
+func RunCheapestWeekend(c *ryanair.Client, origin, dest string, monthsAhead, minNights, maxNights int) (*ryanair.WeekendTrip, error) {
 	h := cheapestWeekend(c)
 	_, out, err := h(context.Background(), nil, weekendInput{
-		Origin: origin, Destination: dest, MonthsAhead: monthsAhead, WeekendLength: weekendLength,
+		Origin: origin, Destination: dest, MonthsAhead: monthsAhead, MinNights: minNights, MaxNights: maxNights,
 	})
 	return out.Trip, err
 }
